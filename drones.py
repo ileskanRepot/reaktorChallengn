@@ -2,6 +2,7 @@
 import json
 import requests
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 import mysql.connector
 
 def printHeaders():
@@ -10,6 +11,31 @@ def printHeaders():
 	print("Pragma: no-cache")
 	print("Expires: 0")
 	print("")
+
+def getUserInfo(user):
+	serial, coordX, coordY, dist, timestamp = user
+	ret = {
+		"id": serial,
+		"x": coordX,
+		"y": coordY,
+		"min dist": dist,
+		"firstName": "",
+		"lastName": "",
+		"email": "",
+		"phoneNro": "",
+		"time": str(timestamp)
+	}
+	try:
+		req = requests.get(f"https://assignments.reaktor.com/birdnest/pilots/{serial}")
+		if req.status_code == 200:
+			driver = req.json()
+			ret["firstName"] = driver['firstName']
+			ret["lastName"] = driver['lastName']
+			ret["email"] = driver['email']
+			ret["phoneNro"] = driver['phoneNumber']
+	except requests.exceptions.RequestException:
+		pass
+	return ret
 
 def main():
 	psw = ""
@@ -35,44 +61,8 @@ def main():
 	
 	queryLocal = ("SELECT firstName, lastName, email, phoneNro from ViolentUsers WHERE serialNro = %s")
 
-	dronesJson = []
-	for ii, (serial, coordX, coordY, dist, timestamp) in enumerate(cursor):
-		cursorLocal = mydb.cursor(buffered=True)
-		dronesJson.append({
-			"id": serial,
-			"x": coordX,
-			"y": coordY,
-			"min dist": dist,
-			"firstName": "",
-			"lastName": "",
-			"email": "",
-			"phoneNro": "",
-			"time": str(timestamp)
-		})
-		cursorLocal.execute(queryLocal, (serial,))
-		if cursorLocal.rowcount > 0:
-			# firstName, lastName, email, phoneNro = cursorLocal
-			for items in cursorLocal:
-				firstName, lastName, email, phoneNro = items
-				dronesJson[ii]["firstName"] = firstName
-				dronesJson[ii]["lastName"] = lastName
-				dronesJson[ii]["email"] = email
-				dronesJson[ii]["phoneNro"] = phoneNro
-				break
-		else:
-			try:
-				req = requests.get(f"https://assignments.reaktor.com/birdnest/pilots/{serial}")
-				if req.status_code == 200:
-					driver = req.json()
-					dronesJson[ii]["firstName"] = driver['firstName']
-					dronesJson[ii]["lastName"] = driver['lastName']
-					dronesJson[ii]["email"] = driver['email']
-					dronesJson[ii]["phoneNro"] = driver['phoneNumber']
-					cursorLocal.execute("INSERT INTO ViolentUsers (serialNro, firstName, lastName, email, phoneNro, timestamp) VALUES (%s, %s, %s, %s, %s, %s)",(serial, driver['firstName'], driver['lastName'],driver['email'],driver['phoneNumber'],datetime.now().strftime("%y-%m-%d %H:%M:%S")))
-					mydb.commit()
-			except requests.exceptions.RequestException:
-				pass
-		cursorLocal.close()
+	with ThreadPoolExecutor(max_workers=100) as pool:
+		dronesJson = list(pool.map(getUserInfo, cursor))
 
 	print(json.dumps(dronesJson))
 
