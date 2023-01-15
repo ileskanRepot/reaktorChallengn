@@ -89,7 +89,7 @@ def main():
 		with open(lastFecthedLocation, 'r') as fil:
 			lastFetched = datetime.datetime.strptime(fil.read(),"%Y-%m-%d %H:%M:%S.%f")
 		if lastFetched < datetime.datetime.now() - datetime.timedelta(minutes=60):
-			sleep(10)
+			sleep(60)
 			continue
 		drones = getDronePositions(dronesUrl)
 		time, violents = getViolantingDrones(drones, middle, radius)
