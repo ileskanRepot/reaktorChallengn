@@ -5,7 +5,7 @@ import mysql.connector
 import xml.etree.ElementTree as ET
 
 from math import sqrt
-from time import time as tm
+from time import time as tm, sleep as sleep
 
 pswLocation = "/home/ileska/psw/mysql.txt"
 
@@ -51,7 +51,7 @@ def writeToSql(time, drones):
 		val = (drone[0], drone[1], drone[2], drone[3], time)
 		cursor.execute(sql, val)
 	mydb.commit()
-	print(cursor.rowcount)
+	return cursor.rowcount
 
 def removeOldSql():
 	psw = ""
@@ -73,7 +73,6 @@ def removeOldSql():
 	cursor.execute(sql, val)
 	mydb.commit()
 
-	time30MinutesAgo = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
 	sql = "DELETE FROM ViolentUsers WHERE timestamp < %s"
 	val = (timeTenMinutesAgo.strftime("%y-%m-%d %H:%M:%S"),)
 	cursor.execute(sql, val)
@@ -84,14 +83,15 @@ def main():
 	radius = 100
 	
 	dronesUrl = "https://assignments.reaktor.com/birdnest/drones"
-	start = tm()
-	drones = getDronePositions(dronesUrl)
-	time, violents = getViolantingDrones(drones, middle, radius)
-	print(violents)
-	
-	print(time)
-	writeToSql(time, violents)
-	removeOldSql()
+	print("Time, rows added")
+	while True:
+		drones = getDronePositions(dronesUrl)
+		time, violents = getViolantingDrones(drones, middle, radius)
+
+		affectedRows = writeToSql(time, violents)
+		print(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") ,affectedRows)
+		removeOldSql()
+		sleep(1)
 
 if __name__ == "__main__":
 	main()
