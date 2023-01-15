@@ -8,6 +8,7 @@ from math import sqrt
 from time import time as tm, sleep as sleep
 
 pswLocation = "/home/ileska/psw/mysql.txt"
+lastFecthedLocation = "/home/ileska/ileska.luntti.net/reaktor/lastFetched.txt"
 
 def getDronePositions(url):
 	req = requests.get(url)
@@ -85,11 +86,16 @@ def main():
 	dronesUrl = "https://assignments.reaktor.com/birdnest/drones"
 	print("Time, rows added")
 	while True:
+		with open(lastFecthedLocation, 'r') as fil:
+			lastFetched = datetime.datetime.strptime(fil.read(),"%Y-%m-%d %H:%M:%S.%f")
+		if lastFetched < datetime.datetime.now() - datetime.timedelta(minutes=60):
+			sleep(10)
+			continue
 		drones = getDronePositions(dronesUrl)
 		time, violents = getViolantingDrones(drones, middle, radius)
 
 		affectedRows = writeToSql(time, violents)
-		print(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") ,affectedRows)
+		print(datetime.datetime.now() ,affectedRows)
 		removeOldSql()
 		sleep(1)
 

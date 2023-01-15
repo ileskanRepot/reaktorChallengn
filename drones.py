@@ -5,12 +5,20 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import mysql.connector
 
+pswLocation = "/home/ileska/psw/mysql.txt"
+lastFecthedLocation = "/home/ileska/ileska.luntti.net/reaktor/lastFetched.txt"
+
 def printHeaders():
 	print("Content-type: text/json")
 	print("Cache-Control: no-cache, no-store, must-revalidate")
 	print("Pragma: no-cache")
 	print("Expires: 0")
 	print("")
+
+def saveFecthDate():
+	with open(lastFecthedLocation, 'w') as fil:
+		fil.write(str(datetime.now()))
+
 
 def getUserInfo(user):
 	serial, coordX, coordY, dist, timestamp = user
@@ -40,7 +48,7 @@ def getUserInfo(user):
 def main():
 	psw = ""
 
-	with open("../../psw/mysql.txt", 'r') as fil:
+	with open(pswLocation, 'r') as fil:
 		psw = fil.read().replace('\n','')
 
 	mydb = mysql.connector.connect(
@@ -50,7 +58,7 @@ def main():
 		database="train_sql_ileska"
 	)
 
-	cursor = mydb.cursor(buffered=True)
+	cursor = mydb.cursor()
 
 	query = ("SELECT serialNro, coordX, coordY, MIN(dist), timestamp from ViolentDrones group by serialNro;")
 
@@ -65,6 +73,7 @@ def main():
 		dronesJson = list(pool.map(getUserInfo, cursor))
 
 	print(json.dumps(dronesJson))
+	saveFecthDate()
 
 if __name__ == "__main__":
 	main()
