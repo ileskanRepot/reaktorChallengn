@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+import requests
+import datetime
+import mysql.connector
+import xml.etree.ElementTree as ET
+
+from math import sqrt
+from time import time as tm
+
+pswLocation = "/home/ileska/psw/mysql.txt"
+
+def getDronePositions(url):
+	req = requests.get(url)
+
+	if req.status_code != 200:
+		exit()
+
+	return (req.text)
+
+def getViolantingDrones(xml,middle,radius):
+	violanting = []
+	root = ET.fromstring(xml)
+	time = root[1].attrib
+	time_obj = datetime.datetime.strptime(time['snapshotTimestamp'],'%Y-%m-%dT%H:%M:%S.%fZ')
+	for drone in root[1]:
+		y = float(drone.find('positionY').text)/1000
+		x = float(drone.find('positionX').text)/1000
+		# ET.dump(drone)
+		dist = (middle[0] - x)**2 + (middle[1] - y)**2
+		if dist <= (radius)**2:
+			violanting.append([drone.find('serialNumber').text, round(x), round(y), round(sqrt(dist))])
+
+	return (time_obj, violanting)
+
+def writeToSql(time, drones):
+	psw = ""
+
+	with open(pswLocation, 'r') as fil:
+		psw = fil.read().replace('\n','')
+
+	mydb = mysql.connector.connect(
+		host="sql.ileska.luntti.net",
+		user="sql_ileska",
+		password=psw,
+		database="train_sql_ileska"
+	)
+
+	cursor = mydb.cursor()
+	sql = "INSERT INTO ViolentDrones (serialNro, coordX, coordY, dist, timestamp) VALUES (%s, %s, %s, %s, %s)"
+	for drone in drones:
+		val = (drone[0], drone[1], drone[2], drone[3], time)
+		cursor.execute(sql, val)
+	mydb.commit()
+	print(cursor.rowcount)
+
+def removeOldSql():
+	psw = ""
+
+	with open(pswLocation, 'r') as fil:
+		psw = fil.read().replace('\n','')
+
+	mydb = mysql.connector.connect(
+		host="sql.ileska.luntti.net",
+		user="sql_ileska",
+		password=psw,
+		database="train_sql_ileska"
+	)
+
+	cursor = mydb.cursor()
+	timeTenMinutesAgo = datetime.datetime.utcnow() - datetime.timedelta(minutes=10)
+	sql = "DELETE FROM ViolentDrones WHERE timestamp < %s"
+	val = (timeTenMinutesAgo.strftime("%y-%m-%d %H:%M:%S"),)
+	cursor.execute(sql, val)
+	mydb.commit()
+
+	time30MinutesAgo = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
+	sql = "DELETE FROM ViolentUsers WHERE timestamp < %s"
+	val = (timeTenMinutesAgo.strftime("%y-%m-%d %H:%M:%S"),)
+	cursor.execute(sql, val)
+	mydb.commit()
+
+def main():
+	middle = (250,250)
+	radius = 100
+	
+	dronesUrl = "https://assignments.reaktor.com/birdnest/drones"
+	start = tm()
+	drones = getDronePositions(dronesUrl)
+	time, violents = getViolantingDrones(drones, middle, radius)
+	print(violents)
+	
+	print(time)
+	writeToSql(time, violents)
+	removeOldSql()
+
+if __name__ == "__main__":
+	main()
+
